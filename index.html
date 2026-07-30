@@ -353,6 +353,33 @@
     text-align: center;
     margin-top: 8px;
   }
+  .progress-wrap {
+    margin-top: 16px;
+  }
+  .progress-track {
+    width: 100%;
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #3b82f6, #60a5fa);
+    border-radius: 6px;
+    transition: width 0.4s ease;
+  }
+  .progress-label {
+    font-size: 12.5px;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 9px;
+  }
+  .progress-pct {
+    font-weight: 700;
+    color: #1d4ed8;
+  }
   .error-box {
     background: #fef2f2;
     border-left: 4px solid var(--red);
@@ -502,7 +529,10 @@
       </button>
     </div>
     <button class="big-generate-btn" id="briefingBtn" onclick="generateBriefingBook()">Generate Briefing Book →</button>
-    <div class="loading-note" id="loadingNote" style="display:none;"><span class="spinner"></span>Researching the company and writing the briefing — this can take a minute...</div>
+    <div class="progress-wrap" id="progressWrap" style="display:none;">
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-label"><span class="progress-pct" id="progressPct">0%</span> — <span id="progressLabel">Starting up...</span></div>
+    </div>
     <div class="error-box" id="briefingError"></div>
   </div>
 
@@ -642,6 +672,84 @@ addPanelist();
 
 let currentDepth = 'thorough';
 let lastBriefingMarkdown = '';
+let progressTimer = null;
+
+// Rough stage script, not tied to real backend events (a single request/response
+// call has no server-side progress signal) — paced against an estimated total
+// duration per depth so it feels like real movement instead of a static spinner.
+const PROGRESS_STAGES = {
+  thorough: [
+    { at: 0, label: 'Reading the job description and inputs...' },
+    { at: 8, label: 'Researching the company...' },
+    { at: 22, label: 'Checking recent news and leadership...' },
+    { at: 38, label: 'Reviewing product and market position...' },
+    { at: 52, label: 'Assessing job fit against the candidate background...' },
+    { at: 66, label: 'Building panel member dossiers...' },
+    { at: 80, label: 'Drafting anticipated questions and red flags...' },
+    { at: 92, label: 'Finalizing the briefing document...' },
+  ],
+  fast: [
+    { at: 0, label: 'Reading the job description and inputs...' },
+    { at: 12, label: 'Researching the company...' },
+    { at: 35, label: 'Assessing job fit...' },
+    { at: 60, label: 'Building the interview guide...' },
+    { at: 82, label: 'Finalizing the briefing document...' },
+  ],
+};
+const ESTIMATED_DURATION_MS = { thorough: 100000, fast: 30000 };
+
+function startProgress(depth) {
+  const wrap = document.getElementById('progressWrap');
+  const fill = document.getElementById('progressFill');
+  const pct = document.getElementById('progressPct');
+  const label = document.getElementById('progressLabel');
+  const stages = PROGRESS_STAGES[depth] || PROGRESS_STAGES.thorough;
+  const estMs = ESTIMATED_DURATION_MS[depth] || ESTIMATED_DURATION_MS.thorough;
+  const startTime = Date.now();
+
+  wrap.style.display = 'block';
+  fill.style.width = '0%';
+  pct.textContent = '0%';
+  label.textContent = stages[0].label;
+
+  if (progressTimer) clearInterval(progressTimer);
+  progressTimer = setInterval(() => {
+    const elapsed = Date.now() - startTime;
+    // Eases toward 92% over the estimated duration and holds there — never
+    // claims 100% until the response actually comes back.
+    const p = Math.min(92, (elapsed / estMs) * 92);
+    fill.style.width = p.toFixed(1) + '%';
+    pct.textContent = Math.round(p) + '%';
+    let current = stages[0].label;
+    for (const s of stages) {
+      if (p >= s.at) current = s.label;
+    }
+    label.textContent = current;
+  }, 400);
+}
+
+function stopProgress(success) {
+  if (progressTimer) {
+    clearInterval(progressTimer);
+    progressTimer = null;
+  }
+  const wrap = document.getElementById('progressWrap');
+  const fill = document.getElementById('progressFill');
+  const pct = document.getElementById('progressPct');
+  const label = document.getElementById('progressLabel');
+  if (success) {
+    fill.style.width = '100%';
+    pct.textContent = '100%';
+    label.textContent = 'Done!';
+    setTimeout(() => {
+      wrap.style.display = 'none';
+      fill.style.width = '0%';
+    }, 700);
+  } else {
+    wrap.style.display = 'none';
+    fill.style.width = '0%';
+  }
+}
 
 function setDepth(d) {
   currentDepth = d;
@@ -680,9 +788,8 @@ async function generateBriefingBook() {
   }
 
   const btn = document.getElementById('briefingBtn');
-  const loadingNote = document.getElementById('loadingNote');
   btn.disabled = true;
-  loadingNote.style.display = 'block';
+  startProgress(currentDepth);
   document.getElementById('briefingOutputCard').classList.remove('show');
 
   try {
@@ -721,12 +828,13 @@ async function generateBriefingBook() {
 
     document.getElementById('briefingOutputCard').classList.add('show');
     document.getElementById('briefingOutputCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    stopProgress(true);
   } catch (err) {
     errBox.textContent = '⚠ ' + (err && err.message ? err.message : 'Something went wrong generating the briefing. Please try again.');
     errBox.classList.add('show');
+    stopProgress(false);
   } finally {
     btn.disabled = false;
-    loadingNote.style.display = 'none';
   }
 }
 
