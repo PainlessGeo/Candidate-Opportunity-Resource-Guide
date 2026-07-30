@@ -24,17 +24,43 @@ function val(v, fallback) {
   return c.length ? c : (fallback || 'Not provided');
 }
 
-function buildPanelistBlock(panelists) {
-  if (!Array.isArray(panelists) || !panelists.length) {
-    return '(No panel members provided — skip panelist-specific personalization in the Interview Guide, but still produce a general version of that section.)';
-  }
-  return panelists.slice(0, MAX_PANELISTS).map((p) => `---
+function buildPanelistBlock(panelists, recruiterName, hiringManagerName) {
+  if (Array.isArray(panelists) && panelists.length) {
+    return {
+      mode: 'full_profiles',
+      text: panelists.slice(0, MAX_PANELISTS).map((p) => `---
 Name: ${val(p && p.name)}
 Title / Role: ${val(p && p.title)}
 Relationship to the role: ${val(p && p.relationship)}
 LinkedIn profile (pasted text):
 ${val(p && p.linkedin)}
----`).join('\n\n');
+---`).join('\n\n'),
+    };
+  }
+
+  const namedContacts = [recruiterName, hiringManagerName]
+    .map((n) => clean(n))
+    .filter((n) => n.length);
+
+  if (namedContacts.length) {
+    return {
+      mode: 'named_lookup',
+      text: `No pasted LinkedIn profiles were provided, but these named contacts were given. Use web
+search to find whatever public information exists about them at this company (company bio
+pages, press mentions, conference speaker bios, public professional profile snippets surfaced
+in search results) and build a lighter, best-effort dossier for each. Clearly flag this as
+search-derived rather than sourced from a pasted profile, and note plainly if nothing
+findable turned up for a given name — don't invent background.
+
+Named contacts to look up:
+${namedContacts.map((n) => `- ${n}`).join('\n')}`,
+    };
+  }
+
+  return {
+    mode: 'none',
+    text: '(No panel members, recruiter, or hiring manager identified. Do not attempt individual dossiers or map questions to specific people — instead produce a complete, well-tailored set of generic interview questions based on the role, seniority level, industry, and company context available.)',
+  };
 }
 
 const SYSTEM_PROMPT = `You are an experienced hiring-intelligence analyst producing a confidential interview
@@ -48,6 +74,13 @@ or funding signals, culture signals, leadership — whenever the provided contex
 incomplete or you need up-to-date facts. Prefer primary sources (the company's own site,
 reputable news, SEC/Crunchbase-style data, Glassdoor/Blind for culture signals) over
 speculation.
+
+When a recruiter or hiring manager is identified by name only (no pasted LinkedIn profile),
+use web search to find whatever public information exists about that person at that
+company — company "About/Team" pages, press mentions, conference or podcast appearances,
+public professional profile snippets that surface in search results. Build a lighter,
+best-effort dossier from whatever turns up, and say plainly when nothing useful was found
+rather than guessing at their background.
 
 Always produce the full briefing book structure below in every response — every section,
 every time. Never omit, shrink, or water down a section because an optional input was
@@ -70,7 +103,14 @@ function buildUserPrompt(input) {
   const companyContext = val(input.companyContext, 'Not provided — research and flag what is confirmed vs. inferred');
   const jobDescription = val(input.jobDescription);
   const stage = val(input.interviewStage, 'Not specified');
-  const panelistText = buildPanelistBlock(input.panelists);
+  const panelistInfo = buildPanelistBlock(input.panelists, input.recruiterName, input.hiringManagerName);
+  const panelistText = panelistInfo.text;
+
+  const interviewGuideModeNote = {
+    full_profiles: 'Full pasted LinkedIn profiles were provided for each panelist — produce complete, specific dossiers for each, with questions mapped to individual panelists as instructed below.',
+    named_lookup: 'Only name(s) were provided, no pasted profiles — use web search to build lighter, best-effort dossiers for the named recruiter/hiring manager as instructed below, clearly flagged as search-derived. Still map anticipated and smart questions to these named people where the search results support it.',
+    none: 'No panel members, recruiter, or hiring manager were identified at all — skip section 6a entirely (state plainly that no individual dossiers could be produced) and go straight to a complete, well-tailored set of generic interview questions in 6b/6c based on the role, seniority, industry, and company context. Do not pad this with a thin or apologetic version — make the generic questions genuinely sharp and specific to this role and company.',
+  }[panelistInfo.mode];
 
   return `Produce a complete candidate briefing book now. Use web search as needed to verify
 and enrich company and role information.
@@ -98,6 +138,8 @@ ${jobDescription}
 
 INTERVIEW PANEL MEMBERS:
 ${panelistText}
+
+INTERVIEW GUIDE MODE FOR THIS REQUEST: ${interviewGuideModeNote}
 
 === PRODUCE THIS EXACT STRUCTURE ===
 
@@ -147,21 +189,36 @@ Compare the candidate's background directly against this role's requirements:
   would be needed to complete it.
 
 ## 6. Interview Guide
+Follow the INTERVIEW GUIDE MODE noted above for how to handle this section:
+
 ### 6a. Panel Member Dossiers
-For each panelist: background summary (career path, tenure at company, tenure in role,
-relevant expertise), what their role in the process likely means for what they're
-evaluating, likely interview focus based on their background, genuine rapport points
-visible in their profile, and any tenure/background detail worth flagging as yellow
-or red.
+- If full profiles were provided: for each panelist, give a background summary (career
+  path, tenure at company, tenure in role, relevant expertise), what their role in the
+  process likely means for what they're evaluating, likely interview focus based on
+  their background, genuine rapport points visible in their profile, and any
+  tenure/background detail worth flagging as yellow or red.
+- If only a recruiter/hiring manager name was given: build the lightest dossier the
+  web search results actually support (title, tenure, background if findable) and say
+  plainly if nothing came up — never fabricate specifics.
+- If nothing was identified: skip this subsection with a one-line note that no
+  individual dossiers were possible, and move straight to 6b/6c.
 
 ### 6b. Anticipated Interview Questions
-5–8 questions the candidate should prepare for, each mapped to the panelist most likely
-to ask it and why, calibrated to that panelist's seniority and background.
+- If panelists (full or named-lookup) exist: 5–8 questions the candidate should
+  prepare for, each mapped to the panelist most likely to ask it and why, calibrated
+  to that panelist's seniority and background.
+- If no individuals were identified at all: 6–8 sharp, non-generic questions grounded
+  in this specific role, seniority level, industry, and company context — organized by
+  theme (e.g., technical depth, leadership/scope, culture fit) instead of by person.
+  These should read as genuinely tailored to this job, not boilerplate.
 
 ### 6c. Smart Questions to Ask
-5–8 questions the candidate should ask, organized by which panelist each lands best with
-and why. At least one should surface team stability, decision-making, or role scope not
-already covered in the job posting. No generic filler.
+- If panelists (full or named-lookup) exist: 5–8 questions organized by which
+  panelist each lands best with and why. At least one should surface team stability,
+  decision-making, or role scope not already covered in the job posting.
+- If no individuals were identified at all: 5–8 questions organized by theme instead
+  (team/scope, strategy/roadmap, culture, growth) — still specific to this company and
+  role, still no generic filler.
 
 ## 7. Red Flag Assessment
 - **Job posting red flags** — inflated requirements, missing scope/team info, signs of a

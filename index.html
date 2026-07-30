@@ -513,6 +513,20 @@
     <p class="sub">Add one entry per interviewer. Paste the visible LinkedIn profile text — most AI tools can't open a LinkedIn URL directly.</p>
     <div id="panelistContainer"></div>
     <button type="button" class="add-btn" onclick="addPanelist()">+ Add panel member</button>
+
+    <div class="callout" style="margin-top:18px;">
+      <strong>Don't have panel details yet?</strong> If you at least know who the recruiter or hiring manager is, add their name(s) below — the AI will web-search for public info about them (company bio pages, press, public profile snippets) and build a lighter, best-effort dossier instead of a full LinkedIn-based one. If you leave everything in this section blank, the briefing book still produces a complete, well-tailored set of generic interview questions based on the role and company — it just won't be mapped to specific people.
+    </div>
+    <div class="row2">
+      <div>
+        <label>Recruiter name <span class="opt">(optional)</span></label>
+        <input type="text" id="recruiterName" placeholder="e.g. Sam Patel">
+      </div>
+      <div>
+        <label>Hiring manager name <span class="opt">(optional)</span></label>
+        <input type="text" id="hiringManagerName" placeholder="e.g. Morgan Yu">
+      </div>
+    </div>
   </div>
 
   <div class="card primary-card">
@@ -771,6 +785,8 @@ function gatherPayload() {
     panelists: getPanelistBlocks().map(p => ({
       name: p.name, title: p.title, relationship: p.rel, linkedin: p.li
     })),
+    recruiterName: val('recruiterName', ''),
+    hiringManagerName: val('hiringManagerName', ''),
     depth: currentDepth
   };
 }
