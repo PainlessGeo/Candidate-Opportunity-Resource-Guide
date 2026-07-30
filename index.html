@@ -691,7 +691,18 @@ async function generateBriefingBook() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    const data = await resp.json();
+
+    const rawText = await resp.text();
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch (parseErr) {
+      if (resp.status === 504 || /timed out/i.test(rawText)) {
+        throw new Error('The request timed out before the briefing finished generating. This is more common in "Thorough" mode on a long job description — try "Fast" mode, or shorten the job description and try again.');
+      }
+      throw new Error('The server returned an unexpected response (status ' + resp.status + '). Please try again in a moment.');
+    }
+
     if (!resp.ok || !data.ok) {
       throw new Error(data.error || ('Request failed with status ' + resp.status));
     }

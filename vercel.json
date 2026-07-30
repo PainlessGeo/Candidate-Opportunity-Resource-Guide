@@ -11,8 +11,14 @@
     }
   ],
   "functions": {
-    "api/**/*.js": {
-      "maxDuration": 90
+    "api/generate-briefing.js": {
+      "maxDuration": 280
+    },
+    "api/export-docx.js": {
+      "maxDuration": 30
+    },
+    "api/export-pdf.js": {
+      "maxDuration": 30
     }
   }
 }
