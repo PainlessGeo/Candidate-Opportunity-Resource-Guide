@@ -1,0 +1,10 @@
+{
+  "name": "interview-panel-briefing",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Interview Panel Intelligence Briefing — generates a candidate briefing book via the Claude API and exports it as DOCX/PDF.",
+  "dependencies": {
+    "docx": "^9.7.1",
+    "pdfkit": "^0.19.1"
+  }
+}

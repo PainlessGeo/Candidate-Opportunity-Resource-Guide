@@ -429,7 +429,7 @@
 
   <div class="card">
     <h2>🎯 Who this briefing is for</h2>
-    <p class="sub">This is being prepared on the candidate's behalf, not for you. Everything below is optional — the prompt still produces the full standard output either way.</p>
+    <p class="sub">This is being prepared on the candidate's behalf, not for you. Everything below is optional — the briefing book still produces the full standard output either way.</p>
     <div class="callout">
       <strong>How to add candidate info:</strong> Upload their resume (PDF, DOCX, or TXT) below — it auto-extracts as text you can review and edit before generating. For LinkedIn, open their profile in a browser, select the visible About / Experience / Skills sections, copy, and paste into the box below — AI tools can't log in to LinkedIn from a URL alone, so pasted text is required either way.
     </div>
@@ -510,46 +510,18 @@
     <h2>✅ Briefing book ready</h2>
     <div class="briefing-meta" id="briefingMeta"></div>
     <div class="output-actions">
-      <button class="action-btn" onclick="printBriefing()">Print / Save as PDF</button>
+      <button class="action-btn" id="docxBtn" onclick="downloadBriefingDocx()">Download Word (.docx)</button>
+      <button class="action-btn" id="pdfBtn" onclick="downloadBriefingPdf()">Download PDF</button>
       <button class="action-btn secondary" onclick="copyBriefingMarkdown()">Copy as Markdown</button>
-      <button class="action-btn secondary" onclick="downloadBriefingMarkdown()">Download .md</button>
       <span class="copied-msg" id="briefingCopiedMsg">Copied ✓</span>
     </div>
+    <div class="error-box" id="exportError"></div>
     <div class="briefing-doc" id="briefingDoc"></div>
-  </div>
-
-  <div class="or-divider">— or, if you'd rather run it yourself elsewhere —</div>
-
-  <div class="card">
-    <h2>📄 Just give me a prompt to copy</h2>
-    <p class="sub">Builds a ready-to-paste prompt instead of generating here — useful for sharing with someone who doesn't have this page.</p>
-    <div class="toggle-group">
-      <button type="button" class="toggle-btn active" data-version="full" onclick="setVersion('full')">
-        Full briefing
-        <small>All 7 sections — company, panelist dossiers, anticipated Qs, smart Qs, red flags, bottom line</small>
-      </button>
-      <button type="button" class="toggle-btn" data-version="quick" onclick="setVersion('quick')">
-        Quick version
-        <small>Condensed 5-point version for when there's no time</small>
-      </button>
-    </div>
-    <button class="secondary-link-btn" onclick="generatePrompt()">Generate Prompt →</button>
-  </div>
-
-  <div class="card output-card" id="outputCard">
-    <h2>✅ Your prompt is ready</h2>
-    <p class="sub">Copy this into Claude (or another AI) to generate the briefing.</p>
-    <div class="output-actions">
-      <button class="action-btn" onclick="copyOutput()">Copy to clipboard</button>
-      <button class="action-btn secondary" onclick="downloadOutput()">Download as .txt</button>
-      <span class="copied-msg" id="copiedMsg">Copied ✓</span>
-    </div>
-    <textarea id="output" readonly></textarea>
   </div>
 
 </div>
 
-<div class="footer-note">Built for personal / community use. Resume/file parsing happens locally in your browser. "Generate Briefing Book" sends the form contents to this site's own server function, which calls Claude to write the briefing — nothing is stored in a database, but the content does leave your browser for that one request. The prompt-builder option below never sends anything anywhere.</div>
+<div class="footer-note">Built for personal / community use. Resume/file parsing happens locally in your browser. "Generate Briefing Book" sends the form contents to this site's own server function, which calls Claude to write the briefing; "Download Word" and "Download PDF" send the already-generated text to two more server functions that format it into a file. Nothing is stored in a database, but content does leave your browser for those requests.</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -560,7 +532,6 @@ if (window['pdfjsLib']) {
 }
 
 let panelistCount = 0;
-let currentVersion = 'full';
 
 async function extractPdfText(arrayBuffer) {
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -643,13 +614,6 @@ function removePanelist(id) {
   if (el) el.remove();
 }
 
-function setVersion(v) {
-  currentVersion = v;
-  document.querySelectorAll('.toggle-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.version === v);
-  });
-}
-
 function val(id, fallback) {
   const el = document.getElementById(id);
   const v = el ? el.value.trim() : '';
@@ -668,190 +632,6 @@ function getPanelistBlocks() {
     blocks.push({ name, title, rel, li });
   });
   return blocks;
-}
-
-function generatePrompt() {
-  const candidateName = val('candidateName');
-  const jobTitle = val('jobTitle');
-  const candidateBackground = val('candidateBackground');
-  const candidateLinkedin = val('candidateLinkedin');
-  const companyName = val('companyName');
-  const stage = val('interviewStage');
-  const jobDescription = val('jobDescription');
-  const companyContext = val('companyContext', 'Not provided — use your own knowledge and reasoning, and flag anything you\'re inferring vs. confirmed');
-  const panelists = getPanelistBlocks();
-
-  let panelistText = panelists.map(p =>
-`---
-Name: ${p.name}
-Title / Role: ${p.title}
-Relationship to the role: ${p.rel}
-LinkedIn profile (pasted text):
-${p.li}
----`).join('\n\n');
-
-  if (!panelistText) {
-    panelistText = '---\n(No panel members added — add at least one for panelist-specific sections to work.)\n---';
-  }
-
-  let prompt;
-
-  if (currentVersion === 'full') {
-    prompt = `You are acting as a private interview-preparation analyst for ${candidateName}, who has
-an upcoming interview at ${companyName} for the ${jobTitle} role. You are not the
-candidate — you are preparing this briefing on their behalf, so write it as a document
-addressed to them, not as if you were the one being interviewed.
-
-Your job is to combine open-source research discipline with interview coaching: research
-the company and the specific people the candidate will be sitting across from, then
-produce a briefing that lets them walk in already informed rather than guessing cold.
-
-=== INPUTS ===
-
-CANDIDATE RESUME / BACKGROUND:
-${candidateBackground}
-
-CANDIDATE LINKEDIN PROFILE (pasted text):
-${candidateLinkedin}
-
-JOB DESCRIPTION (full text):
-${jobDescription}
-
-COMPANY NAME:
-${companyName}
-
-ADDITIONAL COMPANY CONTEXT:
-${companyContext}
-
-INTERVIEW PANEL MEMBERS:
-${panelistText}
-
-INTERVIEW STAGE: ${stage}
-
-=== WHAT TO PRODUCE ===
-
-Structure your output with these exact section headers:
-
-## 1. Company Briefing
-- Snapshot: what the company does, size, stage (startup/growth/mature), market position
-- Business model, and what's likely driving the hiring need for this specific role
-- Recent developments (last 12–24 months): leadership changes, funding, layoffs, pivots,
-  notable news — state plainly what's confirmed vs. what you're inferring
-- Culture signals: what's praised vs. criticized in available reviews/public sentiment;
-  how the company appears to handle failure, disagreement, and change
-- Competitive position and market pressures relevant to this role
-
-## 2. Role Reality Check
-- What the job description says vs. what the role likely actually involves day to day
-- Why this role is probably open (backfill, growth, restructure) based on available signals
-- What "success in the first 90 days" likely looks like in this seat
-- Anything vague, inflated, or conspicuously missing from the job description (scope,
-  team size, reporting line, requirements mismatched to the seniority level)
-
-## 3. Panel Member Dossiers
-For each panelist, a short dossier:
-- Background summary — career path, tenure at the company, tenure in their current role,
-  relevant expertise
-- What their role in the process likely means (what they're evaluating for, given their
-  position relative to the role)
-- Likely interview focus or angle based on their background
-- Genuine rapport points visible in their profile (shared background, overlapping
-  companies/schools, mutual interests) — for authentic connection, not flattery
-- Any tenure/background detail worth flagging as yellow or red
-
-## 4. Anticipated Interview Questions
-- 5–8 questions the candidate should prepare for, each mapped to the panelist most
-  likely to ask it and why
-- Calibrate likely depth to that panelist's seniority and background
-- At least one likely behavioral or values-fit question per panelist where their
-  profile suggests a specific angle
-
-## 5. Smart Questions to Ask
-- 5–8 questions the candidate should ask, organized by which panelist each lands best
-  with and why
-- At least one question designed to surface team stability, decision-making, or role
-  scope that isn't already covered in the job posting
-- No generic filler — every question should tie to something specific in the job
-  description, the company research, or a panelist's background
-
-## 6. Red Flag Assessment
-- **Job posting red flags** — inflated requirements, missing scope/team info, signs of
-  a ghost listing, unusually long time open
-- **Company red flags** — instability, leadership churn, concerning news, growth signals
-  that don't add up
-- **Panel/people red flags** — unusual turnover in the reporting chain, a panelist very
-  new to their own role, inconsistent or disorganized information about the process
-- Mark each item's severity: 🔴 Serious concern / 🟡 Worth asking about
-- If a category has nothing notable, say so explicitly rather than manufacturing a flag
-
-## 7. Bottom Line
-- A short, direct summary: the one or two things this candidate most needs to know
-  walking in, and the single most important thing to accomplish in this interview
-
-=== RULES ===
-- Always produce all 7 sections above in full — every section, every time. Never omit,
-  shrink, or water down a section because an optional input was marked "Not provided."
-  Reason from whatever is available (job description, company name, panel info) and
-  note plainly where you're working with limited information — the structure and depth
-  of the output stays standard regardless of which optional fields were filled in.
-- Separate confirmed facts (from the inputs given) from reasonable inference — flag
-  inferences explicitly ("likely," "based on X, this suggests...").
-- Do not invent specific facts (dates, numbers, names) that weren't provided or aren't
-  well-established public knowledge — say "not enough information" instead of guessing.
-- Write in a direct, practical tone — like a sharp colleague prepping them, not a
-  corporate report.
-- If a LinkedIn profile or resume is missing or thin, say so and work with what's
-  available rather than stalling on it or skipping the section it feeds.`;
-  } else {
-    prompt = `Job description: ${jobDescription}
-Company: ${companyName}
-Interview stage: ${stage}
-
-Panel members (name, title, relationship, and pasted LinkedIn profile text):
-${panelistText}
-
-For ${candidateName}, who is interviewing for the ${jobTitle} role, give me:
-1. A 5-bullet company snapshot (what they do, stage, recent news, culture signal)
-2. A one-paragraph dossier on each panelist (background, what they're likely evaluating for)
-3. 5 questions I should expect, mapped to who's likely to ask them
-4. 5 smart questions to ask back, mapped to who each lands best with
-5. Any red flags in the posting, the company, or the panel — rate each 🔴 or 🟡
-
-Candidate background (for tailoring, if provided): ${candidateBackground}
-Candidate LinkedIn profile (if provided): ${candidateLinkedin}
-Additional company context (if provided): ${companyContext}
-
-Produce all 5 items in full standard form regardless of which optional fields above
-were filled in — don't shrink or skip an item for missing optional data, just note
-where you're working with limited information. Flag anything you're inferring rather
-than stating as fact.`;
-  }
-
-  document.getElementById('output').value = prompt;
-  document.getElementById('outputCard').classList.add('show');
-  document.getElementById('outputCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-function copyOutput() {
-  const output = document.getElementById('output');
-  output.select();
-  output.setSelectionRange(0, 999999);
-  navigator.clipboard.writeText(output.value).then(() => {
-    const msg = document.getElementById('copiedMsg');
-    msg.classList.add('show');
-    setTimeout(() => msg.classList.remove('show'), 1800);
-  });
-}
-
-function downloadOutput() {
-  const text = document.getElementById('output').value;
-  const blob = new Blob([text], { type: 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'interview_panel_briefing_prompt.txt';
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 // Start with two blank panelist slots
@@ -939,10 +719,6 @@ async function generateBriefingBook() {
   }
 }
 
-function printBriefing() {
-  window.print();
-}
-
 function copyBriefingMarkdown() {
   navigator.clipboard.writeText(lastBriefingMarkdown).then(() => {
     const msg = document.getElementById('briefingCopiedMsg');
@@ -951,14 +727,65 @@ function copyBriefingMarkdown() {
   });
 }
 
-function downloadBriefingMarkdown() {
-  const blob = new Blob([lastBriefingMarkdown], { type: 'text/markdown' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'briefing_book.md';
-  a.click();
-  URL.revokeObjectURL(url);
+function briefingTitle() {
+  const c = val('candidateName', 'Candidate');
+  const j = val('jobTitle', 'Role');
+  const co = val('companyName', 'Company');
+  return `Briefing Book — ${c} — ${j} at ${co}`;
+}
+
+async function downloadFileFromExport(endpoint, filename, btnId) {
+  const errBox = document.getElementById('exportError');
+  errBox.classList.remove('show');
+  errBox.textContent = '';
+
+  if (!lastBriefingMarkdown) {
+    errBox.textContent = 'Generate the briefing book first, then export it.';
+    errBox.classList.add('show');
+    return;
+  }
+
+  const btn = document.getElementById(btnId);
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Preparing file...';
+
+  try {
+    const resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ markdown: lastBriefingMarkdown, title: briefingTitle() })
+    });
+    if (!resp.ok) {
+      let msg = 'Export failed with status ' + resp.status;
+      try {
+        const errData = await resp.json();
+        if (errData && errData.error) msg = errData.error;
+      } catch (e) { /* response wasn't JSON, keep default message */ }
+      throw new Error(msg);
+    }
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    errBox.textContent = '⚠ ' + (err && err.message ? err.message : 'Something went wrong exporting the file.');
+    errBox.classList.add('show');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
+function downloadBriefingDocx() {
+  downloadFileFromExport('/api/export-docx', 'briefing_book.docx', 'docxBtn');
+}
+
+function downloadBriefingPdf() {
+  downloadFileFromExport('/api/export-pdf', 'briefing_book.pdf', 'pdfBtn');
 }
 </script>
 
