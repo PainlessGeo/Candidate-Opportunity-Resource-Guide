@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Interview Panel Intelligence Briefing — Briefing Book Generator</title>
+<title>Interview Panel Intelligence Briefing — Prompt Builder</title>
 <style>
   :root {
     --navy: #0d1526;
@@ -289,140 +289,14 @@
   }
   .file-status.ok { color: var(--green); }
   .file-status.err { color: var(--red); }
-
-  .primary-card {
-    border: 1.5px solid #bfdbfe;
-    background: linear-gradient(180deg, #f5f9ff 0%, #ffffff 60%);
-  }
-  .depth-hint {
-    font-size: 11.5px;
-    color: var(--muted);
-    margin-top: 8px;
-  }
-  .big-generate-btn {
-    width: 100%;
-    background: var(--navy);
-    color: #fff;
-    border: none;
-    border-radius: 9px;
-    padding: 16px 24px;
-    font-size: 15.5px;
-    font-weight: 700;
-    cursor: pointer;
-    box-shadow: 0 6px 18px rgba(13,21,38,0.25);
-    margin-top: 16px;
-  }
-  .big-generate-btn:hover { background: #16233d; }
-  .big-generate-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-  .or-divider {
-    text-align: center;
-    font-size: 11.5px;
-    color: var(--muted);
-    margin: 4px 0;
-  }
-  .secondary-link-btn {
-    display: block;
-    width: 100%;
-    text-align: center;
-    background: none;
-    border: 1.5px solid #d7dce5;
-    color: var(--navy2);
-    border-radius: 8px;
-    padding: 10px 16px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    margin-top: 6px;
-  }
-  .secondary-link-btn:hover { background: #f8faff; }
-  .spinner {
-    display: inline-block;
-    width: 16px;
-    height: 16px;
-    border: 2.5px solid rgba(255,255,255,0.35);
-    border-top-color: #fff;
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-    vertical-align: middle;
-    margin-right: 8px;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .loading-note {
-    font-size: 12px;
-    color: var(--muted);
-    text-align: center;
-    margin-top: 8px;
-  }
-  .error-box {
-    background: #fef2f2;
-    border-left: 4px solid var(--red);
-    border-radius: 0 6px 6px 0;
-    padding: 12px 16px;
-    font-size: 12.5px;
-    color: #991b1b;
-    margin-top: 14px;
-    display: none;
-  }
-  .error-box.show { display: block; }
-  .briefing-doc {
-    background: #fff;
-    border-radius: 8px;
-    padding: 32px 36px;
-    border: 1px solid var(--border);
-    font-size: 14px;
-    line-height: 1.7;
-    color: #1e293b;
-  }
-  .briefing-doc h1 {
-    font-size: 21px;
-    color: var(--navy);
-    border-bottom: 2px solid #dbeafe;
-    padding-bottom: 10px;
-    margin: 0 0 18px;
-  }
-  .briefing-doc h2 {
-    font-size: 16.5px;
-    color: var(--navy2);
-    margin: 26px 0 10px;
-    display: block;
-  }
-  .briefing-doc h3 {
-    font-size: 14px;
-    color: #1d4ed8;
-    margin: 18px 0 8px;
-  }
-  .briefing-doc p { margin: 0 0 10px; }
-  .briefing-doc ul, .briefing-doc ol { margin: 0 0 12px; padding-left: 22px; }
-  .briefing-doc li { margin-bottom: 5px; }
-  .briefing-doc strong { color: #0f172a; }
-  .briefing-doc hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
-  .briefing-doc a { color: var(--blue); }
-  .briefing-meta {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    font-size: 11.5px;
-    color: var(--muted);
-    margin-bottom: 12px;
-  }
-  .briefing-meta span {
-    background: #f1f5f9;
-    padding: 3px 9px;
-    border-radius: 20px;
-  }
-  @media print {
-    body * { visibility: hidden; }
-    .briefing-doc, .briefing-doc * { visibility: visible; }
-    .briefing-doc { position: absolute; left: 0; top: 0; width: 100%; border: none; box-shadow: none; padding: 0; }
-  }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <div class="eyebrow">Briefing Book Generator</div>
+  <div class="eyebrow">Prompt Builder</div>
   <h1>Interview Panel Intelligence Briefing</h1>
-  <p>Fill in the job, the company, and each panel member's LinkedIn info. Generate a full briefing book — company basics, product overview, job fit against the candidate's background, and a complete interview guide — for someone else's interview prep.</p>
+  <p>Fill in the job, the company, and each panel member's LinkedIn info. This builds a ready-to-paste prompt for Claude (or any AI) that generates a company briefing, panelist dossiers, anticipated questions, smart questions to ask, and a red-flag assessment — for someone else's interview prep.</p>
 </div>
 
 <div class="wrap">
@@ -488,41 +362,8 @@
     <button type="button" class="add-btn" onclick="addPanelist()">+ Add panel member</button>
   </div>
 
-  <div class="card primary-card">
-    <h2>📘 Generate the briefing book</h2>
-    <p class="sub">Runs Claude directly (with live web search) and builds the full document right here — company basics, product overview, job fit, and a complete interview guide.</p>
-    <div class="toggle-group">
-      <button type="button" class="toggle-btn active" data-depth="thorough" onclick="setDepth('thorough')">
-        Thorough (recommended)
-        <small>Deeper research, more search — best quality, takes ~30–60s</small>
-      </button>
-      <button type="button" class="toggle-btn" data-depth="fast" onclick="setDepth('fast')">
-        Fast
-        <small>Lighter research — quicker, good for a first pass</small>
-      </button>
-    </div>
-    <button class="big-generate-btn" id="briefingBtn" onclick="generateBriefingBook()">Generate Briefing Book →</button>
-    <div class="loading-note" id="loadingNote" style="display:none;"><span class="spinner"></span>Researching the company and writing the briefing — this can take a minute...</div>
-    <div class="error-box" id="briefingError"></div>
-  </div>
-
-  <div class="card output-card" id="briefingOutputCard">
-    <h2>✅ Briefing book ready</h2>
-    <div class="briefing-meta" id="briefingMeta"></div>
-    <div class="output-actions">
-      <button class="action-btn" onclick="printBriefing()">Print / Save as PDF</button>
-      <button class="action-btn secondary" onclick="copyBriefingMarkdown()">Copy as Markdown</button>
-      <button class="action-btn secondary" onclick="downloadBriefingMarkdown()">Download .md</button>
-      <span class="copied-msg" id="briefingCopiedMsg">Copied ✓</span>
-    </div>
-    <div class="briefing-doc" id="briefingDoc"></div>
-  </div>
-
-  <div class="or-divider">— or, if you'd rather run it yourself elsewhere —</div>
-
   <div class="card">
-    <h2>📄 Just give me a prompt to copy</h2>
-    <p class="sub">Builds a ready-to-paste prompt instead of generating here — useful for sharing with someone who doesn't have this page.</p>
+    <h2>📄 Prompt version</h2>
     <div class="toggle-group">
       <button type="button" class="toggle-btn active" data-version="full" onclick="setVersion('full')">
         Full briefing
@@ -533,7 +374,10 @@
         <small>Condensed 5-point version for when there's no time</small>
       </button>
     </div>
-    <button class="secondary-link-btn" onclick="generatePrompt()">Generate Prompt →</button>
+  </div>
+
+  <div class="generate-bar">
+    <button class="generate-btn" onclick="generatePrompt()">Generate Prompt →</button>
   </div>
 
   <div class="card output-card" id="outputCard">
@@ -549,11 +393,10 @@
 
 </div>
 
-<div class="footer-note">Built for personal / community use. Resume/file parsing happens locally in your browser. "Generate Briefing Book" sends the form contents to this site's own server function, which calls Claude to write the briefing — nothing is stored in a database, but the content does leave your browser for that one request. The prompt-builder option below never sends anything anywhere.</div>
+<div class="footer-note">Built for personal / community use — no data leaves this page. Resume/file parsing happens locally in your browser; nothing is uploaded or stored anywhere.</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
 <script>
 if (window['pdfjsLib']) {
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -857,109 +700,6 @@ function downloadOutput() {
 // Start with two blank panelist slots
 addPanelist();
 addPanelist();
-
-// ---------- Live briefing book generation ----------
-
-let currentDepth = 'thorough';
-let lastBriefingMarkdown = '';
-
-function setDepth(d) {
-  currentDepth = d;
-  document.querySelectorAll('.toggle-btn[data-depth]').forEach(b => {
-    b.classList.toggle('active', b.dataset.depth === d);
-  });
-}
-
-function gatherPayload() {
-  return {
-    candidateName: val('candidateName'),
-    jobTitle: val('jobTitle'),
-    candidateBackground: val('candidateBackground'),
-    candidateLinkedin: val('candidateLinkedin'),
-    companyName: val('companyName'),
-    companyContext: val('companyContext', ''),
-    jobDescription: val('jobDescription', ''),
-    interviewStage: val('interviewStage'),
-    panelists: getPanelistBlocks().map(p => ({
-      name: p.name, title: p.title, relationship: p.rel, linkedin: p.li
-    })),
-    depth: currentDepth
-  };
-}
-
-async function generateBriefingBook() {
-  const payload = gatherPayload();
-  const errBox = document.getElementById('briefingError');
-  errBox.classList.remove('show');
-  errBox.textContent = '';
-
-  if (!payload.jobDescription || payload.jobDescription === 'Not provided') {
-    errBox.textContent = 'A job description is required — paste it in "The company & role" section above.';
-    errBox.classList.add('show');
-    return;
-  }
-
-  const btn = document.getElementById('briefingBtn');
-  const loadingNote = document.getElementById('loadingNote');
-  btn.disabled = true;
-  loadingNote.style.display = 'block';
-  document.getElementById('briefingOutputCard').classList.remove('show');
-
-  try {
-    const resp = await fetch('/api/generate-briefing', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const data = await resp.json();
-    if (!resp.ok || !data.ok) {
-      throw new Error(data.error || ('Request failed with status ' + resp.status));
-    }
-
-    lastBriefingMarkdown = data.briefingMarkdown || '';
-    const doc = document.getElementById('briefingDoc');
-    doc.innerHTML = window.marked ? marked.parse(lastBriefingMarkdown) : lastBriefingMarkdown;
-
-    const meta = document.getElementById('briefingMeta');
-    const sourceCount = Array.isArray(data.sources) ? data.sources.length : 0;
-    meta.innerHTML = `
-      <span>Model: ${data.model || 'unknown'}</span>
-      <span>Depth: ${data.depth || currentDepth}</span>
-      <span>${sourceCount} source${sourceCount === 1 ? '' : 's'} cited</span>
-    `;
-
-    document.getElementById('briefingOutputCard').classList.add('show');
-    document.getElementById('briefingOutputCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  } catch (err) {
-    errBox.textContent = '⚠ ' + (err && err.message ? err.message : 'Something went wrong generating the briefing. Please try again.');
-    errBox.classList.add('show');
-  } finally {
-    btn.disabled = false;
-    loadingNote.style.display = 'none';
-  }
-}
-
-function printBriefing() {
-  window.print();
-}
-
-function copyBriefingMarkdown() {
-  navigator.clipboard.writeText(lastBriefingMarkdown).then(() => {
-    const msg = document.getElementById('briefingCopiedMsg');
-    msg.classList.add('show');
-    setTimeout(() => msg.classList.remove('show'), 1800);
-  });
-}
-
-function downloadBriefingMarkdown() {
-  const blob = new Blob([lastBriefingMarkdown], { type: 'text/markdown' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'briefing_book.md';
-  a.click();
-  URL.revokeObjectURL(url);
-}
 </script>
 
 </body>

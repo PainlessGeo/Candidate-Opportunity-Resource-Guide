@@ -1,0 +1,307 @@
+// api/generate-briefing.js
+// Vercel serverless function (Node.js, CommonJS, no dependencies — uses native fetch).
+// Calls the Anthropic API with the web search tool enabled to generate a full
+// candidate briefing book: company basics, product overview, job fit, and an
+// interview guide. Requires ANTHROPIC_API_KEY set in Vercel project env vars.
+
+const MAX_FIELD_LEN = 20000; // guard against oversized/abusive payloads
+const MAX_PANELISTS = 10;
+
+function cors(res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+}
+
+function clean(v, max) {
+  if (typeof v !== 'string') return '';
+  const trimmed = v.trim();
+  return trimmed.length > (max || MAX_FIELD_LEN) ? trimmed.slice(0, max || MAX_FIELD_LEN) : trimmed;
+}
+
+function val(v, fallback) {
+  const c = clean(v);
+  return c.length ? c : (fallback || 'Not provided');
+}
+
+function buildPanelistBlock(panelists) {
+  if (!Array.isArray(panelists) || !panelists.length) {
+    return '(No panel members provided — skip panelist-specific personalization in the Interview Guide, but still produce a general version of that section.)';
+  }
+  return panelists.slice(0, MAX_PANELISTS).map((p) => `---
+Name: ${val(p && p.name)}
+Title / Role: ${val(p && p.title)}
+Relationship to the role: ${val(p && p.relationship)}
+LinkedIn profile (pasted text):
+${val(p && p.linkedin)}
+---`).join('\n\n');
+}
+
+const SYSTEM_PROMPT = `You are an experienced hiring-intelligence analyst producing a confidential interview
+briefing book for a job candidate. You were engaged by someone helping that candidate
+prepare — you are not the candidate, and you write directly to them in a clear, direct,
+practical tone, like a sharp colleague prepping them, not a corporate report.
+
+You have a web search tool available. Use it to verify and fill in real, current
+information about the company — recent news, what they actually build/sell, financial
+or funding signals, culture signals, leadership — whenever the provided context is
+incomplete or you need up-to-date facts. Prefer primary sources (the company's own site,
+reputable news, SEC/Crunchbase-style data, Glassdoor/Blind for culture signals) over
+speculation.
+
+Always produce the full briefing book structure below in every response — every section,
+every time. Never omit, shrink, or water down a section because an optional input was
+marked "Not provided." Reason from whatever is available and note plainly where you are
+working with limited information or inference — the structure and depth of the output
+stays standard regardless of which optional fields were filled in.
+
+Separate confirmed facts from reasonable inference — flag inferences explicitly ("likely,"
+"based on X, this suggests..."). Do not invent specific facts (dates, numbers, names) that
+you cannot find or verify — say "not enough information" instead of guessing.
+
+Format your entire response in clean Markdown using the exact section headers given below.`;
+
+function buildUserPrompt(input) {
+  const candidateName = val(input.candidateName, 'The candidate');
+  const jobTitle = val(input.jobTitle, 'this role');
+  const candidateBackground = val(input.candidateBackground);
+  const candidateLinkedin = val(input.candidateLinkedin);
+  const companyName = val(input.companyName);
+  const companyContext = val(input.companyContext, 'Not provided — research and flag what is confirmed vs. inferred');
+  const jobDescription = val(input.jobDescription);
+  const stage = val(input.interviewStage, 'Not specified');
+  const panelistText = buildPanelistBlock(input.panelists);
+
+  return `Produce a complete candidate briefing book now. Use web search as needed to verify
+and enrich company and role information.
+
+=== INPUTS ===
+
+CANDIDATE NAME: ${candidateName}
+TARGET ROLE: ${jobTitle}
+INTERVIEW STAGE: ${stage}
+
+CANDIDATE RESUME / BACKGROUND:
+${candidateBackground}
+
+CANDIDATE LINKEDIN PROFILE (pasted text):
+${candidateLinkedin}
+
+COMPANY NAME:
+${companyName}
+
+ADDITIONAL COMPANY CONTEXT PROVIDED BY THE USER:
+${companyContext}
+
+JOB DESCRIPTION (full text):
+${jobDescription}
+
+INTERVIEW PANEL MEMBERS:
+${panelistText}
+
+=== PRODUCE THIS EXACT STRUCTURE ===
+
+# Briefing Book: ${candidateName} — ${jobTitle} at ${companyName}
+
+## 1. Executive Summary
+- 3–5 sentences: the single most important things to know walking in, and the one
+  thing this candidate most needs to accomplish in this interview.
+
+## 2. Company Basics
+- Snapshot: what the company is, size, stage (startup/growth/mature), industry, HQ
+- Financial health / funding / stage signals if findable
+- Leadership: CEO and other relevant leaders, tenure and background
+- Recent developments (last 12–24 months): funding, layoffs, pivots, leadership changes,
+  notable news — state plainly what's confirmed via search vs. what you're inferring
+- Culture signals: what's praised vs. criticized in available reviews/public sentiment
+
+## 3. Product & Market Overview
+- What the company actually builds or sells, in plain language
+- Who their customers are and how they make money
+- Market position: competitors, differentiation, where they're growing or under pressure
+- How this specific role connects to the product — what the person in this seat actually
+  contributes to
+
+## 4. Role Reality Check
+- What the job description says vs. what the role likely actually involves day to day
+- Why this role is probably open (backfill, growth, restructure) based on available signals
+- What "success in the first 90 days" likely looks like in this seat
+- Anything vague, inflated, or conspicuously missing from the job description (scope,
+  team size, reporting line, requirements mismatched to seniority level)
+
+## 5. Job Fit Assessment
+Compare the candidate's background directly against this role's requirements:
+- **Must-Have Alignment (0–10):** does the candidate meet the fundamental non-negotiables
+  for this role? Show your work — which requirements are clearly met, which are unclear,
+  which are gaps.
+- **Growth / Energizer Potential (0–10):** how much of this role likely involves work the
+  candidate would find engaging based on their background and trajectory?
+- **Risk / Gap Concerns (0–10, where 10 = no concerns):** any real gaps, overqualification
+  risk, or mismatch between the candidate's level and the role's scope?
+- **Overall fit label:** Strong Fit / Good Fit / Stretch / Weak Fit — with one paragraph
+  of reasoning.
+- **How to position it:** 2–3 concrete suggestions for how the candidate should frame
+  their background in this specific interview, given any gaps identified above.
+- If candidate background was not provided, say so plainly and skip only the
+  candidate-specific comparison — still produce the full section structure noting what
+  would be needed to complete it.
+
+## 6. Interview Guide
+### 6a. Panel Member Dossiers
+For each panelist: background summary (career path, tenure at company, tenure in role,
+relevant expertise), what their role in the process likely means for what they're
+evaluating, likely interview focus based on their background, genuine rapport points
+visible in their profile, and any tenure/background detail worth flagging as yellow
+or red.
+
+### 6b. Anticipated Interview Questions
+5–8 questions the candidate should prepare for, each mapped to the panelist most likely
+to ask it and why, calibrated to that panelist's seniority and background.
+
+### 6c. Smart Questions to Ask
+5–8 questions the candidate should ask, organized by which panelist each lands best with
+and why. At least one should surface team stability, decision-making, or role scope not
+already covered in the job posting. No generic filler.
+
+## 7. Red Flag Assessment
+- **Job posting red flags** — inflated requirements, missing scope/team info, signs of a
+  ghost listing, unusually long time open
+- **Company red flags** — instability, leadership churn, concerning news, growth signals
+  that don't add up
+- **Panel/people red flags** — unusual turnover, a panelist very new to their own role,
+  inconsistent or disorganized information about the process
+- Mark each item's severity: 🔴 Serious concern / 🟡 Worth asking about
+- If a category has nothing notable, say so explicitly rather than manufacturing a flag
+
+## 8. Bottom Line
+- A short, direct closing: the one or two things this candidate most needs to remember,
+  and a clear go/proceed-with-eyes-open/reconsider read given everything above.
+
+## Sources
+- List the URLs and titles of anything you found via web search that materially
+  informed this briefing. If you didn't need to search, say so.`;
+}
+
+module.exports = async (req, res) => {
+  cors(res);
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method not allowed. Use POST.' });
+    return;
+  }
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    res.status(500).json({ error: 'Server misconfigured: ANTHROPIC_API_KEY is not set in this Vercel project\'s environment variables.' });
+    return;
+  }
+
+  let body = req.body;
+  if (!body || typeof body !== 'object') {
+    try {
+      body = JSON.parse(body || '{}');
+    } catch (e) {
+      res.status(400).json({ error: 'Invalid JSON body.' });
+      return;
+    }
+  }
+
+  if (!body.jobDescription || !clean(body.jobDescription).length) {
+    res.status(400).json({ error: 'A job description is required to generate a briefing.' });
+    return;
+  }
+  if (Array.isArray(body.panelists) && body.panelists.length > MAX_PANELISTS) {
+    res.status(400).json({ error: `Please limit panel members to ${MAX_PANELISTS} or fewer.` });
+    return;
+  }
+
+  const depth = body.depth === 'fast' ? 'fast' : 'thorough';
+  const model = depth === 'fast' ? 'claude-haiku-4-5-20251001' : 'claude-sonnet-5';
+  const maxSearches = depth === 'fast' ? 4 : 8;
+
+  const userPrompt = buildUserPrompt(body);
+
+  async function callClaude(messages) {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 8000,
+        system: SYSTEM_PROMPT,
+        messages,
+        tools: [
+          {
+            type: 'web_search_20250305',
+            name: 'web_search',
+            max_uses: maxSearches,
+          },
+        ],
+      }),
+    });
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => '');
+      throw new Error(`Anthropic API error ${resp.status}: ${errText.slice(0, 500)}`);
+    }
+    return resp.json();
+  }
+
+  try {
+    let messages = [{ role: 'user', content: userPrompt }];
+    let response = await callClaude(messages);
+
+    // Handle the documented pause_turn case (long-running multi-search turns) —
+    // resend the paused assistant message to let the API continue, capped at 3 tries.
+    let attempts = 0;
+    while (response.stop_reason === 'pause_turn' && attempts < 3) {
+      messages = messages.concat([{ role: 'assistant', content: response.content }]);
+      response = await callClaude(messages);
+      attempts += 1;
+    }
+
+    const textParts = [];
+    const sources = [];
+    const seenUrls = new Set();
+
+    for (const block of response.content || []) {
+      if (block.type === 'text') {
+        textParts.push(block.text);
+        if (Array.isArray(block.citations)) {
+          for (const c of block.citations) {
+            if (c.url && !seenUrls.has(c.url)) {
+              seenUrls.add(c.url);
+              sources.push({ url: c.url, title: c.title || c.url });
+            }
+          }
+        }
+      } else if (block.type === 'web_search_tool_result' && Array.isArray(block.content)) {
+        for (const r of block.content) {
+          if (r.url && !seenUrls.has(r.url)) {
+            seenUrls.add(r.url);
+            sources.push({ url: r.url, title: r.title || r.url });
+          }
+        }
+      }
+    }
+
+    const briefingMarkdown = textParts.join('\n\n').trim();
+
+    res.status(200).json({
+      ok: true,
+      model,
+      depth,
+      briefingMarkdown,
+      sources,
+      stopReason: response.stop_reason,
+    });
+  } catch (err) {
+    res.status(502).json({ error: 'Failed to generate briefing: ' + (err && err.message ? err.message : String(err)) });
+  }
+};
