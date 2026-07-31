@@ -291,7 +291,7 @@ module.exports = async (req, res) => {
       },
       body: JSON.stringify({
         model,
-        max_tokens: 8000,
+        max_tokens: 16000,
         system: SYSTEM_PROMPT,
         messages,
         tools: [
@@ -313,13 +313,40 @@ module.exports = async (req, res) => {
   try {
     let messages = [{ role: 'user', content: userPrompt }];
     let response = await callClaude(messages);
+    let allBlocks = (response.content || []).slice();
 
-    // Handle the documented pause_turn case (long-running multi-search turns) —
-    // resend the paused assistant message to let the API continue, capped at 3 tries.
+    // Handle two documented "not actually done" cases, each capped so total
+    // round trips stay bounded within the function's time budget:
+    //  - pause_turn: the API paused mid-turn (e.g. during a long tool-use chain)
+    //    and expects the paused assistant message resent as-is to continue.
+    //  - max_tokens: the response hit the per-call output cap before finishing
+    //    the full document structure — explicitly ask it to keep going from
+    //    where it left off rather than starting over.
+    // Earlier attempts only kept the FINAL response's content, silently
+    // discarding everything written in earlier rounds — that's what caused
+    // briefings to cut off mid-section. Every round's content is now
+    // accumulated into allBlocks instead.
     let attempts = 0;
-    while (response.stop_reason === 'pause_turn' && attempts < 3) {
-      messages = messages.concat([{ role: 'assistant', content: response.content }]);
+    const MAX_CONTINUATIONS = 5;
+    while (
+      (response.stop_reason === 'pause_turn' || response.stop_reason === 'max_tokens') &&
+      attempts < MAX_CONTINUATIONS
+    ) {
+      if (response.stop_reason === 'max_tokens') {
+        messages = messages.concat([
+          { role: 'assistant', content: response.content },
+          {
+            role: 'user',
+            content: 'Continue exactly where you left off. Do not repeat any text you already ' +
+              'wrote and do not restart the document — resume mid-section if needed and keep ' +
+              'going until the full structure (through the ## Sources section) is complete.',
+          },
+        ]);
+      } else {
+        messages = messages.concat([{ role: 'assistant', content: response.content }]);
+      }
       response = await callClaude(messages);
+      allBlocks = allBlocks.concat(response.content || []);
       attempts += 1;
     }
 
@@ -327,7 +354,7 @@ module.exports = async (req, res) => {
     const sources = [];
     const seenUrls = new Set();
 
-    for (const block of response.content || []) {
+    for (const block of allBlocks) {
       if (block.type === 'text') {
         textParts.push(block.text);
         if (Array.isArray(block.citations)) {
