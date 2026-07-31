@@ -24,7 +24,7 @@ function val(v, fallback) {
   return c.length ? c : (fallback || 'Not provided');
 }
 
-function buildPanelistBlock(panelists, recruiterName, hiringManagerName) {
+function buildPanelistBlock(panelists, recruiterName, hiringManagerName, autoDetectRecruiter) {
   if (Array.isArray(panelists) && panelists.length) {
     return {
       mode: 'full_profiles',
@@ -57,9 +57,24 @@ ${namedContacts.map((n) => `- ${n}`).join('\n')}`,
     };
   }
 
+  if (autoDetectRecruiter) {
+    return {
+      mode: 'auto_detect',
+      text: `No panel members, recruiter, or hiring manager names were provided, but the user asked
+you to try to identify the likely recruiter or talent acquisition contact for this role
+via web search. Try approaches like: searching the company name plus "talent acquisition"
+or "recruiter" or "people team", checking whether the company's careers/team pages name
+anyone in recruiting, and checking whether the job posting text itself names a recruiter
+or contact. Only surface a name if you have a reasonably specific signal tying them to
+this company's recruiting function — do not guess based on generic role titles alone, and
+never present a guess as a confirmed identity. If nothing sufficiently specific turns up,
+say so plainly rather than naming someone on weak evidence.`,
+    };
+  }
+
   return {
     mode: 'none',
-    text: '(No panel members, recruiter, or hiring manager identified. Do not attempt individual dossiers or map questions to specific people — instead produce a complete, well-tailored set of generic interview questions based on the role, seniority level, industry, and company context available.)',
+    text: '(No panel members, recruiter, or hiring manager identified, and auto-detection was not requested. Do not attempt individual dossiers or map questions to specific people — instead produce a complete, well-tailored set of generic interview questions based on the role, seniority level, industry, and company context available.)',
   };
 }
 
@@ -82,6 +97,15 @@ public professional profile snippets that surface in search results. Build a lig
 best-effort dossier from whatever turns up, and say plainly when nothing useful was found
 rather than guessing at their background.
 
+If asked to auto-detect a likely recruiter or talent acquisition contact with no name
+given at all, treat this as a low-confidence inference task, not an identification task.
+Only name someone if there is a reasonably specific signal connecting them to this
+company's recruiting function for this kind of role — never present a guess as confirmed,
+and never name a real person based on a generic title match alone (e.g. "someone at this
+company is probably in recruiting" is not sufficient). Saying "no confident match found"
+is the correct outcome more often than not, and is always preferable to a wrong guess
+about a real person.
+
 Always produce the full briefing book structure below in every response — every section,
 every time. Never omit, shrink, or water down a section because an optional input was
 marked "Not provided." Reason from whatever is available and note plainly where you are
@@ -103,13 +127,16 @@ function buildUserPrompt(input) {
   const companyContext = val(input.companyContext, 'Not provided — research and flag what is confirmed vs. inferred');
   const jobDescription = val(input.jobDescription);
   const stage = val(input.interviewStage, 'Not specified');
-  const panelistInfo = buildPanelistBlock(input.panelists, input.recruiterName, input.hiringManagerName);
+  const panelistInfo = buildPanelistBlock(
+    input.panelists, input.recruiterName, input.hiringManagerName, !!input.autoDetectRecruiter
+  );
   const panelistText = panelistInfo.text;
 
   const interviewGuideModeNote = {
     full_profiles: 'Full pasted LinkedIn profiles were provided for each panelist — produce complete, specific dossiers for each, with questions mapped to individual panelists as instructed below.',
     named_lookup: 'Only name(s) were provided, no pasted profiles — use web search to build lighter, best-effort dossiers for the named recruiter/hiring manager as instructed below, clearly flagged as search-derived. Still map anticipated and smart questions to these named people where the search results support it.',
-    none: 'No panel members, recruiter, or hiring manager were identified at all — skip section 6a entirely (state plainly that no individual dossiers could be produced) and go straight to a complete, well-tailored set of generic interview questions in 6b/6c based on the role, seniority, industry, and company context. Do not pad this with a thin or apologetic version — make the generic questions genuinely sharp and specific to this role and company.',
+    auto_detect: 'No names were given, but the user asked you to attempt to identify the likely recruiter/talent acquisition contact via web search. Produce the "Likely Recruiter / TA Contact" subsection described below with whatever confidence-appropriate result you find (a tentative match, or a plain statement that none could be confidently identified), then still produce the full generic question set in 6b/6c unless a confident match with real background was found.',
+    none: 'No panel members, recruiter, or hiring manager were identified at all, and auto-detection was not requested — skip section 6a entirely (state plainly that no individual dossiers could be produced) and go straight to a complete, well-tailored set of generic interview questions in 6b/6c based on the role, seniority, industry, and company context. Do not pad this with a thin or apologetic version — make the generic questions genuinely sharp and specific to this role and company.',
   }[panelistInfo.mode];
 
   return `Produce a complete candidate briefing book now. Use web search as needed to verify
@@ -200,8 +227,15 @@ Follow the INTERVIEW GUIDE MODE noted above for how to handle this section:
 - If only a recruiter/hiring manager name was given: build the lightest dossier the
   web search results actually support (title, tenure, background if findable) and say
   plainly if nothing came up — never fabricate specifics.
-- If nothing was identified: skip this subsection with a one-line note that no
-  individual dossiers were possible, and move straight to 6b/6c.
+- If auto-detection was requested (no names given): add a subsection titled
+  **"Likely Recruiter / TA Contact (auto-detected)"**. Report either (a) a tentative
+  match with the specific evidence found and an explicit confidence caveat that this
+  is inferred, not confirmed, or (b) a plain statement that no confident match could
+  be identified from public sources — do not present a guess as fact, and do not name
+  someone based on weak/generic evidence.
+- If nothing was identified and auto-detection wasn't requested: skip this subsection
+  with a one-line note that no individual dossiers were possible, and move straight to
+  6b/6c.
 
 ### 6b. Anticipated Interview Questions
 - If panelists (full or named-lookup) exist: 5–8 questions the candidate should

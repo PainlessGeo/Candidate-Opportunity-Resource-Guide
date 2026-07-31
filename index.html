@@ -527,6 +527,14 @@
         <input type="text" id="hiringManagerName" placeholder="e.g. Morgan Yu">
       </div>
     </div>
+
+    <label style="display:flex; align-items:flex-start; gap:9px; margin-top:16px; cursor:pointer;">
+      <input type="checkbox" id="autoDetectRecruiter" style="margin-top:3px; width:auto;">
+      <span style="font-weight:600; color:#334155;">
+        Don't know either name? Try to identify the likely recruiter / talent acquisition contact via web search
+        <span class="opt" style="display:block; font-weight:400; margin-top:2px;">Best-effort only — searches public sources (company team/careers pages, press, LinkedIn snippets that surface in search) for who's likely handling this role. Clearly flagged as an inference, never presented as confirmed. Only runs when no recruiter/hiring manager name and no panel members are provided above.</span>
+      </span>
+    </label>
   </div>
 
   <div class="card primary-card">
@@ -787,6 +795,7 @@ function gatherPayload() {
     })),
     recruiterName: val('recruiterName', ''),
     hiringManagerName: val('hiringManagerName', ''),
+    autoDetectRecruiter: !!document.getElementById('autoDetectRecruiter').checked,
     depth: currentDepth
   };
 }
